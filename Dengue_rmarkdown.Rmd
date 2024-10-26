@@ -1,0 +1,385 @@
+---
+title: "Análisis de dengue en Brasil, 2000-2019"
+author: "Jose García Tácite"
+date: "2024-03-11"
+output:
+  rmdformats::downcute:
+    html_document:
+      df_print: kable
+
+---
+
+### Introducción a la problemática
+
+El dengue es una enfermedad viral transmitida por la picadura del mosquito Aedes aegypti. Cuando el mosquito se alimenta con sangre de una persona enferma de dengue, y luego pica a otras personas, puede transmitir esta enfermedad. El contagio se produce principalmente por la picadura de los mosquitos infectados, nunca de forma directa de una persona a otra, ni a través de objetos o de la leche materna (Fuente: <https://www.argentina.gob.ar/salud/glosario/dengue>)
+
+![Aedes aegypti](https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Aedes_aegypti.jpg/375px-Aedes_aegypti.jpg)
+
+En este análisis, se busca interpretar algunos datos registrados durante los años 2000 y 2019 en Brasil. La base de datos fue obtenida en Kaggle (<https://www.kaggle.com/datasets/raomuhammadsaeedali/brazil-dengue-dataset-2000-2019>).
+
+### Pre-procesamiento
+
+#### Establecimiento de directorio de trabajo, carga de archivo .csv y librerías para manipulación y gráfico de datos
+
+```{r setup, include=FALSE}
+# Establecer el directorio de trabajo globalmente
+#knitr::opts_knit$set(root.dir = "D:/Dengue_Brasi")
+
+
+#install.packages("conflicted")
+library(conflicted)
+library(gridExtra)
+library(tidyverse)
+conflict_prefer("combine", "gridExtra")
+
+
+dengue_brasil <- read_csv("Brasil.csv")
+```
+
+#### Limpieza:
+
+A)  Selección de columnas y creación de df: state_name, region_name, biome_name, ecozone_name, main_climate, month, year, dengue_cases, population, pop_density, tmax, tmin, urban, water_network, water_shortage
+
+```{r}
+dengue <- dengue_brasil %>% 
+  select(state_name, region_name, biome_name, ecozone_name, main_climate, month, year, dengue_cases, population, pop_density, tmax, tmin, urban, water_network, water_shortage)
+```
+
+B)  Reemplazo de abreviaturas de climas por descripciones
+
+```{r}
+dengue$main_climate <- gsub("AF", "Clima tropical lluvioso",dengue$main_climate) 
+dengue$main_climate <- gsub("AM", "Clima tropical monzonico",dengue$main_climate) 
+dengue$main_climate <- gsub("AS", "Clima tropical de sabana",dengue$main_climate) 
+dengue$main_climate <- gsub("AW", "Clima tropical de sabana con estacion seca corta",dengue$main_climate) 
+dengue$main_climate <- gsub("BSH", "Clima seco subtropical",dengue$main_climate) 
+dengue$main_climate <- gsub("CFA", "Clima subtropical humedo",dengue$main_climate) 
+dengue$main_climate <- gsub("CFB", "Clima subtropical humedo con verano templado",dengue$main_climate) 
+dengue$main_climate <- gsub("CWA", "Clima subtropical humedo con invierno seco",dengue$main_climate) 
+dengue$main_climate <- gsub("CWB", "Clima subtropical humedo con invierno seco y verano calido",dengue$main_climate)
+```
+
+C)  Eliminación de filas con valores no disponibles o vacíos(NA)
+
+```{r}
+dengue <- na.omit(dengue)
+```
+
+### Análisis exploratorio
+
+#### ¿Cuántos casos de dengue se han reportado en Brasil desde 2000 a 2019?
+
+```{r}
+sum(dengue$dengue_cases)
+```
+
+#### Distribución de casos de dengue por estado
+
+```{r}
+# Generar dataframe
+dengue_estados <- dengue %>% 
+  group_by(state_name) %>% 
+  summarise(casos_estado = sum(dengue_cases)) %>% 
+  arrange(-casos_estado) %>% 
+  print()
+  
+
+# Graficar
+ggplot(data=dengue_estados, aes(x=state_name, y = casos_estado))+
+  geom_bar(stat="identity",fill= 'gold', color= 'black')+
+  labs(title = 'Distribución de dengue por estado', x = 'Estado', y = 'Cantidad de casos')+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+*¿Cuáles son los estados con más casos?*
+
+```{r}
+casos_max_dengue_estado <- dengue_estados %>% 
+  group_by(state_name) %>% 
+  arrange(-casos_estado) %>% 
+  head() %>% 
+  print()
+
+
+ggplot(casos_max_dengue_estado, aes(x=state_name, y=casos_estado)) +
+  geom_bar(stat="identity", fill = 'indianred', color = 'black') +
+  labs(title= 'Cinco estados con más casos',x = "Estado", y = "Cantidad de casos de dengue")+
+  theme_minimal()
+```
+
+*¿Cuáles son los estados con menos casos?*
+
+```{r}
+casos_min_dengue_estado <- dengue_estados %>% 
+  group_by(state_name) %>% 
+  arrange(-casos_estado) %>% 
+  tail() %>% 
+  print()
+
+
+ggplot(casos_min_dengue_estado, aes(x=state_name, y=casos_estado)) +
+  geom_bar(stat="identity", fill = 'darkgreen', color = 'black') +
+  labs(title= 'Cinco estados con menos casos',x = "Estado", y = "Cantidad de casos de dengue")+
+  theme_minimal()
+```
+
+#### Distribución de casos de dengue por región
+
+```{r}
+dengue_region <- dengue %>% 
+  group_by(region_name) %>% 
+  summarise(dengue_region = sum(dengue_cases)) %>% 
+  arrange(-dengue_region) %>% 
+  print()
+
+
+# Desactivar notación científica
+options(scipen=999)
+
+
+ggplot(data = dengue_region, aes(x=region_name, y=dengue_region))+
+  geom_bar(stat="identity", fill='indianred', color = 'black')+
+  labs(title= 'Cantidad de casos de dengue por región', x="Región", y="Cantidad de casos de dengue")+
+  theme_minimal()
+```
+
+*¿Cómo quedaría, entonces, la distribución de casos por estado y región?*
+
+```{r}
+dengue_estado_region_max <- dengue %>% 
+  group_by(state_name,region_name) %>% 
+  summarise(total_casos = sum(dengue_cases), .groups = "drop") %>% 
+  arrange(-total_casos) %>% 
+  head() %>% 
+  print()
+
+
+ggplot(data = dengue_estado_region_max, aes(x=state_name, y=total_casos, fill = region_name))+
+  geom_bar(stat='identity')+
+  labs(title= 'Estados y regiones con más casos de dengue', x="Estado", y="Cantidad de casos de dengue", fill= 'Región')+
+  theme_minimal()
+```
+
+```{r}
+dengue_estado_region_min <- dengue %>% 
+  group_by(state_name,region_name) %>% 
+  summarise(total_casos = sum(dengue_cases), .groups="drop") %>% 
+  arrange(-total_casos) %>% 
+  tail() %>% 
+  print()
+
+
+ggplot(data = dengue_estado_region_min, aes(x=state_name, y=total_casos, fill = region_name))+
+  geom_bar(stat='identity')+
+  labs(title= 'Estados y regiones con menos casos de dengue', x="Estado", y="Cantidad de casos de dengue", fill= 'Región')+
+  theme_minimal()
+```
+
+#### Distribución de dengue según condiciones climáticas
+
+##### **Clima principal**
+
+```{r}
+casos_dengue_climas <- dengue %>% 
+  group_by(main_climate) %>% 
+  summarise(casos_clima = sum(dengue_cases)) %>% 
+  arrange(-casos_clima) %>% 
+  print()
+
+
+ggplot(casos_dengue_climas,aes(x=main_climate,y=casos_clima))+
+  geom_bar(stat="identity",fill="#CAE1FF")+
+  labs(title = 'Cantidad de casos por clima', x = 'Tipo de clima', y = 'Cantidad de casos')+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+##### **Temperaturas**
+
+```{r}
+dengue_temp <- dengue %>% 
+  group_by(main_climate,tmax,tmin) %>% 
+  summarise(total_casos = sum(dengue_cases), .groups="drop") %>% 
+  arrange(-total_casos) 
+
+
+dengue_temp_head<- dengue_temp %>% 
+  head() %>% 
+  print()
+
+
+ggplot(dengue_temp, aes(x=tmax,y=total_casos))+
+  geom_point(color='indianred')+
+  geom_point(aes(x=tmin), color = 'lightblue3')+
+  labs(title = 'Relación entre casos de dengue, temperaturas máximas y temperaturas mínimas', x = 'Temperaturas', y = 'Casos de dengue') +
+  theme_minimal()
+```
+
+#### Distribución según índice de urbanismo y cantidad de población
+
+##### **Urbanismo**
+
+```{r}
+dengue_urb <- dengue %>% 
+  select(state_name,dengue_cases,population,urban) %>% 
+  group_by(urban,population) %>% 
+  summarise(casos_urb = sum(dengue_cases), .groups = "drop") %>% 
+  arrange(-casos_urb) %>% 
+  print()
+
+
+grafico_urb <- ggplot(dengue_urb,aes(x=urban, y=casos_urb))+
+  geom_point(color='lavenderblush3')+
+  labs(title = 'Relación entre índice de urbanismo y cantidad de casos', x= 'Indice de urbanismo', y = 'Cantidad de casos')+
+  theme_minimal()
+
+grafico_urb
+```
+
+*Correlación entre índice de urbanismo y cantidad de casos*
+
+```{r}
+correlacion_urb<- dengue %>% 
+  select(dengue_cases,urban)
+
+
+correlacion_urb <- cor(correlacion_urb) %>% 
+  print()
+```
+
+##### **Cantidad de población**
+
+```{r}
+dengue_pobl <- dengue %>% 
+  select(state_name,dengue_cases,population,pop_density) %>% 
+  group_by(population) %>% 
+  summarise(casos_pobl = sum(dengue_cases)) %>% 
+  arrange(-casos_pobl) %>% 
+  print()
+
+
+ggplot(dengue_pobl,aes(x=population, y=casos_pobl))+
+  geom_point(color='lightsalmon')+
+  labs(title = 'Relación entre cantidad de población y cantidad de casos', x= 'Cantidad de población', y = 'Cantidad de casos')+
+  theme_minimal()
+```
+
+*Correlación entre cantidad poblacional y cantidad de casos*
+
+```{r}
+correlacion_pobl<- dengue %>% 
+  select(dengue_cases,population)
+
+
+correlacion_pobl <- cor(correlacion_pobl) %>% 
+  print()
+```
+
+La correlación entre la cantidad de población y de casos de dengue es mayor que aquella entre el índice de urbanismo y la cantidad de enfermxs.
+
+#### Exploración con respecto a disponibilidad de agua corriente
+
+```{r}
+dengue_agua <- dengue %>% 
+  select(state_name,dengue_cases,water_network) %>% 
+  group_by(state_name,water_network) %>% 
+  summarise(casos = sum(dengue_cases), .groups = "drop") %>% 
+  arrange(-casos)
+
+grafico_agua <- ggplot(dengue_agua,aes(x=water_network,y=casos))+
+  geom_point(color = 'lightskyblue2')+
+  labs(title = 'Relación entre índice de agua corriente y cantidad de casos', x= 'Indice de agua corriente', y = 'Cantidad de casos')+
+  theme_minimal()
+
+grafico_agua
+```
+
+```{r}
+grid.arrange(grafico_urb,grafico_agua, nrow=2)
+```
+
+Los gráficos que indican la relación entre casos y urbanismo, y casos y agua corriente son bastante parecidos.
+
+#### Exploración por tendencias temporales
+
+*¿Cómo han variado los casos de dengue a lo largo del tiempo?*
+
+```{r}
+dengue_anual <- dengue %>% 
+  group_by(year) %>% 
+  summarise(casos_anuales = sum(dengue_cases)) %>% 
+  arrange(-casos_anuales) %>% 
+  print()
+
+ggplot(dengue_anual,aes(x=year,y=casos_anuales))+
+  geom_bar(stat="identity", fill = 'orange', color = 'black')+
+  labs(title = "Variación anual de casos de dengue", x = 'Año', y = 'Cantidad de casos')+
+  theme_minimal()
+```
+
+*¿Existen patrones estacionales en la incidencia de casos de dengue?*
+
+```{r}
+dengue_mensual <- dengue %>% 
+  group_by(month) %>% 
+  summarise(casos_mensuales = sum(dengue_cases)) %>% 
+  arrange(-casos_mensuales) %>% 
+  print()
+
+
+ggplot(dengue_mensual,aes(x=month,y=casos_mensuales))+
+  geom_bar(stat="identity", fill = 'violet', color = 'black')+
+  labs(title = "Variación mensual de casos de dengue", x = 'Mes', y = 'Cantidad de casos')+
+  theme_minimal()
+```
+
+Los meses de marzo, abril y mayo son los que más casos presentaron.
+
+*¿En qué mes y año se presentaron más casos y menos casos?*
+
+```{r}
+dengue_mes_año <- dengue %>% 
+  group_by(month, year) %>% 
+  summarise(total_casos = sum(dengue_cases), .groups = "drop") %>% 
+  arrange(-total_casos) 
+
+
+#Más casos:
+head(dengue_mes_año)
+
+
+#Menos casos:
+tail(dengue_mes_año)
+```
+
+#### Identificación de posibles factores de riesgo
+
+##### ¿Qué factores parecen estar más asociados con un mayor número de casos de dengue?
+
+```{r}
+dengue_matriz <- dengue %>% 
+  select(dengue_cases:water_shortage)
+
+matriz_correlacion <- cor(dengue_matriz) %>% 
+  print()
+```
+
+Los casos de dengue tienen más correlación con la cantidad poblacional -0.227324491- y menos con la temperatura máxima -0.008786726-.
+
+### Conclusiones
+
+##### Entonces, ¿se pueden identificar posibles factores de riesgo que contribuyan a la propagación del dengue en ciertas regiones o estados?
+
+```{r}
+dengue_regiones_estados <- dengue %>% 
+  select(population,pop_density,urban,state_name,region_name) %>% 
+  group_by(state_name) %>% 
+  arrange(-population) %>% 
+  distinct(state_name, region_name) %>% 
+  print()
+```
+
+Si consideramos que el mayor factor de riesgo es la cantidad de población, entonces los estados del sureste y sur con ciudades grandes como Sao Paulo, Río de Janeiro, Minas Gerais y Río Grande do Sul son las más propensas a tener más casos de dengue. De hecho, los primeros tres estados nombrados son los que tuvieron más casos de dengue según esta base de datos desde 2000 a 2019. Si bien es necesario realizar campañas públicas de prevención y fumigación en todo el país, en estos cinco estados se deberá aún más reforzar estas acciones.
+
+Queda pendiente averiguar qué ocurrió en 2015 para explicar este crecimiento de casos positivos de dengue.
